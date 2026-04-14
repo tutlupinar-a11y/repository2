@@ -1,67 +1,42 @@
 import streamlit as st
-import camelot
+import pdfplumber
 import pandas as pd
 from io import BytesIO
-import tempfile
-import os
 
-st.set_page_config(page_title="PDF to Excel Converter", layout="wide")
-st.title("📊 Finansal PDF → Excel Dönüştürücü")
+st.set_page_config(page_title="PDF → Excel (Cloud Uyumlu)", layout="wide")
+st.title("📄 PDF → Excel (Streamlit Cloud Uyumlu)")
 
-uploaded_file = st.file_uploader("📄 PDF Dosyasını Yükleyin", type="pdf")
+st.warning(
+    "ℹ️ Streamlit Cloud kısıtları nedeniyle tablolar satır bazlı çıkarılır. "
+    "Finansal PDF'ler için bu en stabil yöntemdir."
+)
+
+uploaded_file = st.file_uploader("PDF Dosyasını Yükleyin", type="pdf")
 
 if uploaded_file and st.button("Excel'e Dönüştür"):
-    with st.spinner("PDF analiz ediliyor..."):
+    with st.spinner("PDF işleniyor..."):
+        rows = []
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(uploaded_file.read())
-            pdf_path = tmp.name
+        with pdfplumber.open(uploaded_file) as pdf:
+            for page in pdf.pages[:30]:
+                text = page.extract_text()
 
-        output = BytesIO()
-
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-
-            sheet_no = 1
-
-            # 1️⃣ Önce lattice (çizgili tablo)
-            tables = camelot.read_pdf(
-                pdf_path,
-                pages="1-30",
-                flavor="lattice"
-            )
-
-            # 2️⃣ Eğer lattice boşsa stream dene
-            if tables.n == 0:
-                tables = camelot.read_pdf(
-                    pdf_path,
-                    pages="1-30",
-                    flavor="stream"
-                )
-
-            for table in tables:
-                df = table.df
-                df.replace("", pd.NA, inplace=True)
-                df.dropna(how="all", inplace=True)
-
-                if df.shape[0] < 2 or df.shape[1] < 2:
+                if not text:
                     continue
 
-                df.columns = df.iloc[0]
-                df = df[1:].reset_index(drop=True)
+                for line in text.split("\n"):
+                    rows.append([line])
 
-                df.to_excel(
-                    writer,
-                    sheet_name=f"Tablo_{sheet_no}",
-                    index=False
-                )
-                sheet_no += 1
+        df = pd.DataFrame(rows, columns=["PDF Metni"])
 
-        os.unlink(pdf_path)
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Metin")
 
-        st.success("✅ Excel hazır!")
+        st.success("✅ Dönüştürme tamamlandı")
         st.download_button(
             "📥 Excel'i İndir",
             data=output.getvalue(),
-            file_name="finansal_rapor.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            file_name="pdf_metin_ciktisi.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
