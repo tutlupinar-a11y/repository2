@@ -1,48 +1,39 @@
 import streamlit as st
 import pdfplumber
 import pandas as pd
+from io import BytesIO
 
-st.set_page_config(page_title="Finansal Analiz", layout="wide")
-st.title("📊 Gürsel Turizm: Hassas Veri Analizi")
+st.set_page_config(page_title="PDF to Excel Converter", layout="wide")
+st.title("📂 Finansal Rapor Excel Dönüştürücü")
 
-uploaded_file = st.file_uploader("Finansal Raporu Yükleyin", type="pdf")
+st.info("Bu araç, Gürsel Turizm raporu gibi karmaşık PDF'lerdeki tabloları ayıklayıp Excel formatına çevirir.")
+
+uploaded_file = st.file_uploader("PDF Dosyasını Yükleyin", type="pdf")
 
 if uploaded_file is not None:
-    with st.spinner('Derin tarama yapılıyor (Bu biraz zaman alabilir)...'):
-        with pdfplumber.open(uploaded_file) as pdf:
-            relevant_dfs = []
+    if st.button("Excel'e Dönüştür ve İndir"):
+        with st.spinner('Tablolar ayıklanıyor... Bu işlem doküman boyutuna göre vakit alabilir.'):
+            output = BytesIO()
+            # Excel yazıcısını hazırla
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                with pdfplumber.open(uploaded_file) as pdf:
+                    for i, page in enumerate(pdf.pages[:30]): # İlk 30 sayfayı işle
+                        tables = page.extract_tables()
+                        for j, table in enumerate(tables):
+                            df = pd.DataFrame(table)
+                            # Tabloyu temizle (boş satır/sütunları at)
+                            df = df.dropna(how='all').dropna(axis=1, how='all')
+                            
+                            if not df.empty:
+                                # Her tabloyu ayrı bir sayfaya veya isimlendirerek yaz
+                                sheet_name = f"Sayfa_{i+1}_Tablo_{j+1}"
+                                df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
             
-            # İlk 25 sayfayı daha detaylı tara
-            for i in range(25):
-                page = pdf.pages[i]
-                
-                # Tablo bulma ayarlarını hassaslaştırıyoruz
-                table_settings = {
-                    "vertical_strategy": "lines", 
-                    "horizontal_strategy": "lines",
-                    "snap_tolerance": 3,
-                    "join_tolerance": 3,
-                }
-                
-                tables = page.extract_tables(table_settings=table_settings)
-                
-                # Eğer standart çizgilerle bulamazsa, metin hizalamasından bulmayı dene
-                if not tables:
-                    tables = page.extract_tables(table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"})
-
-                for table in tables:
-                    df = pd.DataFrame(table)
-                    # "Nakit", "Benzerleri" veya "Yatırım" geçen tabloları filtrele
-                    mask = df.astype(str).apply(lambda x: x.str.contains('Nakit|Benzerleri|Yatırım|Dönem', case=False, na=False))
-                    if mask.any().any():
-                        relevant_dfs.append((i+1, df))
-
-            if relevant_dfs:
-                st.success(f"{len(relevant_dfs)} adet finansal veri tablosu yakalandı!")
-                for page_num, df in relevant_dfs:
-                    with st.expander(f"Sayfa {page_num} üzerindeki Tablo"):
-                        # Boş satır/sütun temizliği yapalım
-                        df = df.dropna(how='all').dropna(axis=1, how='all')
-                        st.dataframe(df, use_container_width=True)
-            else:
-                st.error("Hala tablo çekilemedi. Rapor taranmış bir resim (OCR gerekli) olabilir mi?")
+            processed_data = output.getvalue()
+            st.success("Dönüştürme tamamlandı!")
+            st.download_button(
+                label="📥 Excel Dosyasını İndir",
+                data=processed_data,
+                file_name="finansal_rapor_analiz.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
