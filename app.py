@@ -4,7 +4,7 @@ import pandas as pd
 from io import BytesIO
 
 st.set_page_config(page_title="PDF to Excel Converter", layout="wide")
-st.title("📂 Finansal Rapor Excel Dönüştürücü")
+st.title("📂 Finansal Rapor Excel Dönüştürücü2")
 
 st.info(
     "Bu araç, finansal rapor PDF'lerindeki tabloları daha düzgün şekilde ayıklayıp Excel formatına çevirir."
