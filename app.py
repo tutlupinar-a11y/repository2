@@ -2,39 +2,31 @@ import streamlit as st
 import pdfplumber
 import pandas as pd
 
-st.set_page_config(page_title="Finansal Analiz Paneli", layout="wide")
-st.title("📊 Gürsel Turizm Finansal Veri Çıkarıcı")
+st.set_page_config(page_title="Finansal Analiz", layout="wide")
+st.title("📊 Gürsel Turizm Finansal Tablo Analizi")
 
-uploaded_file = st.file_uploader("PDF Raporunu Buraya Yükleyin", type="pdf")
+uploaded_file = st.file_uploader("PDF Raporunu Yükleyin", type="pdf")
 
 if uploaded_file is not None:
-    with st.spinner('Rapor analiz ediliyor...'):
+    with st.spinner('Tablolar taranıyor...'):
         with pdfplumber.open(uploaded_file) as pdf:
-            all_text = ""
-            # İlk 20 sayfayı tarayalım (Genelde özet tablolar buralardadır)
-            for page in pdf.pages[:20]:
-                all_text += page.extract_text() + "\n"
+            found_tables = []
+            
+            # İlk 30 sayfadaki tabloları kontrol et (Finansal durum tabloları buradadır)
+            for i in range(30):
+                page = pdf.pages[i]
+                tables = page.extract_tables()
+                
+                for table in tables:
+                    df = pd.DataFrame(table)
+                    # Tablo içinde "Nakit" veya "Yatırım" kelimesi geçiyor mu?
+                    if df.astype(str).apply(lambda x: x.str.contains('Nakit|Yatırım', case=False)).any().any():
+                        found_tables.append(df)
 
-            st.success("Analiz Tamamlandı!")
-            
-            # --- VERİ ÇEKME MANTIĞI ---
-            st.subheader("💰 Nakit Durumu ve Yatırımlar")
-            
-            # Basit bir arama yapalım
-            satirlar = all_text.split('\n')
-            
-            bulunan_veriler = []
-            for satir in satirlar:
-                # Aradığımız anahtar kelimeler
-                if "Nakit ve Nakit Benzerleri" in satir or "Finansal Yatırımlar" in satir:
-                    bulunan_veriler.append(satir)
-
-            if bulunan_veriler:
-                for veri in bulunan_veriler:
-                    st.info(veri)
+            if found_tables:
+                st.success(f"{len(found_tables)} adet ilgili tablo bulundu!")
+                for idx, df in enumerate(found_tables):
+                    with st.expander(f"Tablo {idx+1}"):
+                        st.table(df) # Rakamları sütun sütun görmeni sağlar
             else:
-                st.warning("Aranan başlıklar metin içinde tam eşleşme ile bulunamadı. Tablo yapısı karmaşık olabilir.")
-
-            # Test için tüm metni aşağıya ekleyelim
-            with st.expander("Rapor Metnini Gör"):
-                st.text(all_text)
+                st.warning("Rakam içeren tablolar bu yöntemle çekilemedi. Sayfayı manuel inceleyelim.")
