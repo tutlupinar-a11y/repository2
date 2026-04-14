@@ -2,3 +2,5 @@ streamlit
 pdfplumber
 pandas
 xlsxwriter
+camelot-py[cv]
+ghostscript
